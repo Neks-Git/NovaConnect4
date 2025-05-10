@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Connect 4 with AI</title>
+	<style>
+		body {
+			font-family: sans-serif;
+			text-align: center;
+			background: #f0f0f0;
+		}
+		h1 {
+			margin-top: 20px;
+		}
+		#board {
+			display: grid;
+			grid-template-columns: repeat(7, 60px);
+			grid-gap: 5px;
+			justify-content: center;
+			margin-top: 20px;
+		}
+		.cell {
+			width: 60px;
+			height: 60px;
+			background-color: #3498db;
+			border-radius: 50%;
+			border: 2px solid #2980b9;
+			box-sizing: border-box;
+			cursor: pointer;
+		}
+		.cell.empty:hover {
+			background-color: #85c1e9;
+		}
+		.red {
+			background-color: red !important;
+		}
+		.yellow {
+			background-color: yellow !important;
+		}
+		#message {
+			margin-top: 20px;
+			font-size: 1.2em;
+		}
+		#winner {
+			font-weight: bold;
+			color: green;
+		}
+		button {
+			margin-top: 20px;
+			padding: 10px 20px;
+			font-size: 16px;
+			cursor: pointer;
+		}
+	</style>
+</head>
+<body>
+	<h1>Connect 4 (vs AI)</h1>
+	<div id="board"></div>
+	<div id="message">Your Turn: <span id="turn">Red</span></div>
+	<button onclick="resetGame()">Restart Game</button>
+
+	<script>
+		const ROWS = 6;
+		const COLS = 7;
+		const board = [];
+		let currentPlayer = 'red';
+		let gameOver = false;
+
+		const boardDiv = document.getElementById('board');
+		const turnSpan = document.getElementById('turn');
+		const messageDiv = document.getElementById('message');
+
+		function createBoard() {
+			boardDiv.innerHTML = '';
+			board.length = 0;
+
+			for (let r = 0; r < ROWS; r++) {
+				const row = [];
+				for (let c = 0; c < COLS; c++) {
+					const cell = document.createElement('div');
+					cell.classList.add('cell', 'empty');
+					cell.dataset.row = r;
+					cell.dataset.col = c;
+					cell.addEventListener('click', handleClick);
+					boardDiv.appendChild(cell);
+					row.push(cell);
+				}
+				board.push(row);
+			}
+		}
+
+		function handleClick(e) {
+			if (gameOver || currentPlayer !== 'red') return;
+
+			const col = parseInt(e.target.dataset.col);
+			if (makeMove(col, 'red')) {
+				if (!gameOver) {
+					currentPlayer = 'yellow';
+					turnSpan.textContent = 'Yellow (AI)';
+					setTimeout(aiMove, 500);
+				}
+			}
+		}
+
+		function makeMove(col, player) {
+			for (let r = ROWS - 1; r >= 0; r--) {
+				const cell = board[r][col];
+				if (cell.classList.contains('empty')) {
+					cell.classList.remove('empty');
+					cell.classList.add(player);
+					if (checkWin(r, col, player)) {
+						messageDiv.innerHTML = `<span id="winner">${player.toUpperCase()} wins!</span>`;
+						gameOver = true;
+					} else if (isDraw()) {
+						messageDiv.innerHTML = `<span id="winner">It's a draw!</span>`;
+						gameOver = true;
+					}
+					return true;
+				}
+			}
+			return false;
+		}
+
+		function aiMove() {
+			if (gameOver) return;
+
+			let validCols = [];
+			for (let c = 0; c < COLS; c++) {
+				if (board[0][c].classList.contains('empty')) {
+					validCols.push(c);
+				}
+			}
+
+			if (validCols.length === 0) return;
+
+			const col = validCols[Math.floor(Math.random() * validCols.length)];
+			if (makeMove(col, 'yellow')) {
+				if (!gameOver) {
+					currentPlayer = 'red';
+					turnSpan.textContent = 'Red';
+				}
+			}
+		}
+
+		function checkWin(row, col, player) {
+			const directions = [
+				[[0, 1], [0, -1]],
+				[[1, 0], [-1, 0]],
+				[[1, 1], [-1, -1]],
+				[[1, -1], [-1, 1]]
+			];
+
+			for (const dir of directions) {
+				let count = 1;
+				let cellsToHighlight = [board[row][col]];
+
+				for (const [dr, dc] of dir) {
+					let r = row + dr;
+					let c = col + dc;
+
+					while (r >= 0 && r < ROWS && c >= 0 && c < COLS && board[r][c].classList.contains(player)) {
+						count++;
+						cellsToHighlight.push(board[r][c]);
+						r += dr;
+						c += dc;
+					}
+				}
+
+				if (count >= 4) {
+					for (const cell of cellsToHighlight) {
+						cell.style.border = '3px solid green';
+					}
+					return true;
+				}
+			}
+			return false;
+		}
+
+		function isDraw() {
+			for (let c = 0; c < COLS; c++) {
+				if (board[0][c].classList.contains('empty')) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		function resetGame() {
+			gameOver = false;
+			currentPlayer = 'red';
+			turnSpan.textContent = 'Red';
+			messageDiv.innerHTML = 'Your Turn: <span id="turn">Red</span>';
+			createBoard();
+		}
+
+		createBoard();
+	</script>
+</body>
+</html>
