@@ -39,7 +39,7 @@
 	const COLS = 7;
 
 	// scoring and search depth
-	const SCORES = { 0: 0, 1: 1, 2: 10, 3: 100, 4: 10000 };
+	const SCORES = { 0: 0, 1: 2, 2: 50, 3: 1000, 4: 100000 };
 	const MAX_DEPTH = 6;
 
 	const board = [];
@@ -70,7 +70,7 @@
 			if (board[r][col] === '') {
 				board[r][col] = 'R';
 				render();
-				if (checkWin('R')) {
+				if (checkWinBoard(board, 'R')) { // Fixed function name
 					status.textContent = 'You win!';
 					gameOver = true;
 					reportGameResult("Connect 4", "win");
@@ -91,30 +91,23 @@
 	function novaMove() {
 		const best = minimax(board, MAX_DEPTH, -Infinity, +Infinity, true);
 		let col = best.move;
-		// fallback if minimax didn't return a move
-		if (typeof col === 'undefined') {
-			for (let c = 0; c < COLS; c++) {
-				if (getNextOpenRow(board, c) !== -1) {
-					col = c;
-					break;
-				}
-			}
+		// Fallback to first available column if needed
+		if (typeof col === 'undefined' || getNextOpenRow(board, col) === -1) {
+			col = getValidColumns(board)[0];
 		}
-		for (let r = ROWS - 1; r >= 0; r--) {
-			if (board[r][col] === '') {
-				board[r][col] = 'Y';
-				break;
+		const row = getNextOpenRow(board, col);
+		if (row !== -1) {
+			board[row][col] = 'Y';
+			render();
+			if (checkWinBoard(board, 'Y')) { // Fixed function name
+				status.textContent = 'Nova wins!';
+				gameOver = true;
+				reportGameResult("Connect 4", "lose");
+			} else if (isDraw()) {
+				status.textContent = "It's a draw!";
+				gameOver = true;
+				reportGameResult("Connect 4", "draw");
 			}
-		}
-		render();
-		if (checkWin('Y')) {
-			status.textContent = 'Nova wins!';
-			gameOver = true;
-			reportGameResult("Connect 4", "lose");
-		} else if (isDraw()) {
-			status.textContent = "It's a draw!";
-			gameOver = true;
-			reportGameResult("Connect 4", "draw");
 		}
 	}
 
@@ -122,17 +115,19 @@
 		if (checkWinBoard(position, 'Y')) return { score: +Infinity };
 		if (checkWinBoard(position, 'R')) return { score: -Infinity };
 		if (isBoardFull(position) || depth === 0) {
-			return { score: evaluate(position) };
+			return { score: evaluate(position) + centerBonus(position) };
 		}
 
+		const validCols = getValidColumns(position);
+		if (validCols.length === 0) return { score: 0 };
+
 		if (maximizingPlayer) {
-			let maxEval = -Infinity, bestMove = 0;
-			for (let c = 0; c < COLS; c++) {
-				const r = getNextOpenRow(position, c);
-				if (r === -1) continue;
-				position[r][c] = 'Y';
-				const eval = minimax(position, depth - 1, alpha, beta, false).score;
-				position[r][c] = '';
+			let maxEval = -Infinity, bestMove = validCols[0];
+			for (const c of validCols) {
+				const newBoard = copyBoard(position);
+				const r = getNextOpenRow(newBoard, c);
+				newBoard[r][c] = 'Y';
+				const eval = minimax(newBoard, depth - 1, alpha, beta, false).score;
 				if (eval > maxEval) {
 					maxEval = eval;
 					bestMove = c;
@@ -142,13 +137,12 @@
 			}
 			return { score: maxEval, move: bestMove };
 		} else {
-			let minEval = +Infinity, bestMove = 0;
-			for (let c = 0; c < COLS; c++) {
-				const r = getNextOpenRow(position, c);
-				if (r === -1) continue;
-				position[r][c] = 'R';
-				const eval = minimax(position, depth - 1, alpha, beta, true).score;
-				position[r][c] = '';
+			let minEval = +Infinity, bestMove = validCols[0];
+			for (const c of validCols) {
+				const newBoard = copyBoard(position);
+				const r = getNextOpenRow(newBoard, c);
+				newBoard[r][c] = 'R';
+				const eval = minimax(newBoard, depth - 1, alpha, beta, true).score;
 				if (eval < minEval) {
 					minEval = eval;
 					bestMove = c;
@@ -160,6 +154,14 @@
 		}
 	}
 
+	function getValidColumns(bd) {
+		const cols = [];
+		for (let c = 0; c < COLS; c++) {
+			if (bd[0][c] === '') cols.push(c);
+		}
+		return cols;
+	}
+
 	function getNextOpenRow(bd, col) {
 		for (let r = ROWS - 1; r >= 0; r--) {
 			if (bd[r][col] === '') return r;
@@ -167,8 +169,20 @@
 		return -1;
 	}
 
-	function isBoardFull(bd) {
-		return bd[0].every(cell => cell !== '');
+	function copyBoard(bd) {
+		return bd.map(row => [...row]);
+	}
+
+	function centerBonus(bd) {
+		let bonus = 0;
+		const centerCols = [2, 3, 4];
+		for (let r = 0; r < ROWS; r++) {
+			for (const c of centerCols) {
+				if (bd[r][c] === 'Y') bonus += 3;
+				if (bd[r][c] === 'R') bonus -= 3;
+			}
+		}
+		return bonus;
 	}
 
 	function checkWinBoard(bd, player) {
@@ -204,20 +218,16 @@
 		for (let r = 0; r < ROWS; r++) {
 			for (let c = 0; c < COLS; c++) {
 				if (c + 3 < COLS) {
-					const w = [bd[r][c], bd[r][c+1], bd[r][c+2], bd[r][c+3]];
-					score += scoreWindow(w);
+					score += scoreWindow([bd[r][c], bd[r][c+1], bd[r][c+2], bd[r][c+3]]);
 				}
 				if (r + 3 < ROWS) {
-					const w = [bd[r][c], bd[r+1][c], bd[r+2][c], bd[r+3][c]];
-					score += scoreWindow(w);
+					score += scoreWindow([bd[r][c], bd[r+1][c], bd[r+2][c], bd[r+3][c]]);
 				}
 				if (r + 3 < ROWS && c + 3 < COLS) {
-					const w = [bd[r][c], bd[r+1][c+1], bd[r+2][c+2], bd[r+3][c+3]];
-					score += scoreWindow(w);
+					score += scoreWindow([bd[r][c], bd[r+1][c+1], bd[r+2][c+2], bd[r+3][c+3]]);
 				}
 				if (r - 3 >= 0 && c + 3 < COLS) {
-					const w = [bd[r][c], bd[r-1][c+1], bd[r-2][c+2], bd[r-3][c+3]];
-					score += scoreWindow(w);
+					score += scoreWindow([bd[r][c], bd[r-1][c+1], bd[r-2][c+2], bd[r-3][c+3]]);
 				}
 			}
 		}
@@ -227,10 +237,20 @@
 	function scoreWindow(win) {
 		const y = win.filter(v => v === 'Y').length;
 		const r = win.filter(v => v === 'R').length;
+		const empty = win.filter(v => v === '').length;
+
 		if (y > 0 && r > 0) return 0;
-		if (y > 0) return SCORES[y];
-		if (r > 0) return -SCORES[r];
-		return 0;
+		if (y === 4) return SCORES[4];
+		if (r === 4) return -SCORES[4];
+		if (y === 3 && empty === 1) return SCORES[3] * 2;
+		if (r === 3 && empty === 1) return -SCORES[3] * 2;
+		if (y === 2 && empty === 2) return SCORES[2] * 2;
+		if (r === 2 && empty === 2) return -SCORES[2] * 2;
+		return SCORES[y] - SCORES[r];
+	}
+
+	function isBoardFull(bd) {
+		return bd[0].every(cell => cell !== '');
 	}
 
 	function isDraw() {
